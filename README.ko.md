@@ -86,6 +86,7 @@ print(c.chat.completions.create(model="deepseek-flash",
 cd 1min-bulk-apikey
 printf 'socks5://host:port\n' > proxies.txt   # optional — without it the tool runs direct
 node src/launcher.js        # interactive: mint / verify / screen / settings
+
 # or directly — the widget is Turnstile (action=signup, cData=challengeId), so the
 # CLI needs one token per account: point it at your solver, or paste by hand
 node src/cli.js --count 3 --token-cmd "your-solver"
