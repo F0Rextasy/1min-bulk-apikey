@@ -407,7 +407,14 @@ async function turnstileToken({ challengeId, action }) {
         ONEMIN_URL: APP_URL,
       },
     });
-    const token = String(r.stdout || '').trim().split(/\s+/).pop() || '';
+    // Turnstile tokens are `<digit>.<body>` and 65-4096 chars (measured 752/773/
+    // 794/816/837, always a `1.` prefix). Reading the last whitespace run of the
+    // whole stdout silently keeps a fragment when the solver labels the token, so
+    // the strict shape is tried first and the loose classes follow as a fallback.
+    const out = String(r.stdout || '');
+    const line = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).pop() || '';
+    const m = line.match(/\d\.[A-Za-z0-9._-]{63,}$/) || out.match(/[A-Za-z0-9_.-]{40,}/) || out.match(/[A-Za-z0-9_-]{40,}/);
+    const token = m ? m[0] : '';
     if (!token) throw new Error(`--token-cmd produced no token (status ${r.status}): ${String(r.stderr || '').slice(0, 160)}`);
     return { challengeId, token };
   }
