@@ -85,6 +85,8 @@ print(c.chat.completions.create(model="deepseek-flash",
 
 ```bash
 cd 1min-bulk-apikey
+npm install                  # once: pulls puppeteer-core, the embedded solver's browser engine
+# the solver needs a real Chrome: winget install --id Google.Chrome (or set CHROME_PATH)
 printf 'socks5://host:port\n' > proxies.txt   # optional — without it the tool runs direct
 node src/launcher.js        # interactive: mint / verify / screen / settings
 # or directly — the widget is Turnstile (action=signup, cData=challengeId), so the
