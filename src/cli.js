@@ -67,6 +67,7 @@ const readline = require('readline');
 
 const ROOT = path.basename(__dirname) === 'src' ? path.resolve(__dirname, '..') : __dirname;
 const KEYS_FILE = path.join(ROOT, 'keys.txt');
+const DEAD_FILE = path.join(ROOT, 'keys-dead.txt');
 const ACCOUNTS_FILE = path.join(ROOT, 'accounts.json');
 
 
@@ -92,7 +93,7 @@ const has = (name) => argv.includes(`--${name}`);
 if (has('help') || has('h')) {
   console.log(`1min-bulk-apikey — create 1min.AI accounts, one key each, verified by a live chat call.
 
-  node src/cli.js --count 3 --token-cmd "your-turnstile-solver"   mint (chat 200 keeps a key)
+  node src/cli.js --count 3          mint (Turnstile solved automatically; chat 200 keeps a key)
   node src/cli.js --verify-only      re-check every key in keys.txt
   node src/cli.js --screen           test your proxy list against 1min.AI
   node src/cli.js --help
@@ -103,12 +104,13 @@ if (has('help') || has('h')) {
   --pool <file>   proxy list, one exit per line (env ONEMIN_PROXIES) [optional]
   --mailtrap-token <t> / ONEMIN_MAILTRAP_TOKEN   Mailtrap API token (required)
   --mt-folder <n> Mailtrap folder for the inboxes                 [1min-bulk]
-  --token-cmd <c> command printing one Turnstile token per account
-  --token <cid:tok>  a captured challengeId:token pair (one account)
-  --manual        paste each Turnstile token by hand
-
-Requests go through your proxy list when one is provided (--pool / env).
-Without a pool the tool connects directly.`);
+  --auto          solve the Turnstile with the embedded solver (default)
+  --no-auto       disable the embedded solver
+  --dry           resolve the plan, write nothing (no network, no files)
+Advanced solver wiring (env-only) is described in ADVANCED.md; if Chrome is not
+found, install it once or point CHROME_PATH at it. Requests go through your
+proxy list when one is provided (--pool / env); without a pool the tool connects
+directly.`);
   process.exit(0);
 }
 
@@ -126,6 +128,11 @@ const TOKEN_PAIR = arg('token', null);
 const MANUAL = has('manual');
 const VERIFY_ONLY = has('verify-only');
 const SCREEN = has('screen');
+const AUTO = !has('no-auto'); // the embedded solver is the default path (one command)
+const DRY = has('dry'); // resolve the plan, write nothing, send nothing
+/** Lazy require: a checkout without src/solver.js still runs off --token / --token-cmd. */
+let _solver = null;
+const solver = () => (_solver && _solver.solveCaptcha ? _solver : (_solver = require('./solver.js')));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
@@ -388,10 +395,10 @@ async function pollMail(exit, box, { timeoutMs = 180000, pollMs = 6000, filter =
 const rl = () => readline.createInterface({ input: process.stdin, output: process.stdout });
 
 /** The token for one challenge: a captured pair, a solver command, or a paste. */
-async function turnstileToken({ challengeId, action }) {
+async function turnstileToken({ challengeId, action }, exit) {
   if (TOKEN_PAIR) {
     const [cid, tok] = TOKEN_PAIR.split(':');
-    if (!cid || !tok) throw new Error('--token wants "<challengeId>:<token>"');
+    if (!cid || !tok) throw new Error('the captured pair must be "<challengeId>:<token>" — advanced solver flags: see ADVANCED.md');
     return { challengeId: cid, token: tok };
   }
   if (TOKEN_CMD) {
@@ -415,8 +422,12 @@ async function turnstileToken({ challengeId, action }) {
     const line = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean).pop() || '';
     const m = line.match(/\d\.[A-Za-z0-9._-]{63,}$/) || out.match(/[A-Za-z0-9_.-]{40,}/) || out.match(/[A-Za-z0-9_-]{40,}/);
     const token = m ? m[0] : '';
-    if (!token) throw new Error(`--token-cmd produced no token (status ${r.status}): ${String(r.stderr || '').slice(0, 160)}`);
+    if (!token) throw new Error(`an external solver produced no token (status ${r.status}): ${String(r.stderr || '').slice(0, 160)} — advanced solver flags: see ADVANCED.md`);
     return { challengeId, token };
+  }
+  if (AUTO) {
+    const r = await solver().solveCaptcha({ type: 'turnstile', sitekey: SITEKEY, url: APP_URL, proxy: exit ? exit.line : null, cdata: challengeId, action });
+    if (r && r.token) return { challengeId, token: r.token };
   }
   if (MANUAL) {
     const iface = rl();
@@ -430,7 +441,7 @@ async function turnstileToken({ challengeId, action }) {
     if (!answer) throw new Error('no token pasted');
     return { challengeId, token: answer };
   }
-  throw new Error('no Turnstile source: pass --token-cmd (solver), --token "<challengeId>:<token>", or --manual');
+  throw new Error('no Turnstile source: the embedded solver (--auto) gave nothing — advanced solver flags: see ADVANCED.md');
 }
 
 // ------------------------------------------------------------------- flows
@@ -447,7 +458,7 @@ async function signUp(exit, index) {
   const challengeId = ch.json && ch.json.challengeId;
   const action = (ch.json && ch.json.action) || 'signup';
   if (!challengeId) throw new Error(`signup-challenge HTTP ${ch.status}: ${String(ch.text).slice(0, 140)}`);
-  const { challengeId: cid, token } = await turnstileToken({ challengeId, action });
+  const { challengeId: cid, token } = await turnstileToken({ challengeId, action }, exit);
   const su = await exitJson(exit, `${API}/auth/signup`, {
     method: 'POST',
     headers: PANEL_HEADERS,
@@ -498,6 +509,11 @@ async function chatGate(exit, key, model = MODEL) {
 async function mint() {
   const exits = loadExits();
   if (SCREEN) return void (await screen(exits));
+  if (DRY) {
+    console.log('dry run — nothing is written and no request is sent.');
+    console.log(`  count ${COUNT} · conc ${CONC} · model ${MODEL} · exits ${exits.filter(Boolean).length || 'direct'} · solver ${AUTO ? 'embedded src/solver.js (--auto)' : 'off (--no-auto)'}`);
+    return;
+  }
   const accounts = loadAccounts();
   log(`1min · ${COUNT} key(s) · conc ${CONC} · exits ${exits.filter(Boolean).length || 'direct'} · keys land in keys.txt`);
   let made = 0;
@@ -540,6 +556,7 @@ async function mint() {
     if (GAP_MS) await sleep(GAP_MS);
   }
   log(`done — ${made}/${COUNT} key(s) written to ${KEYS_FILE}`);
+  console.log(`__MINT_SUMMARY__ ${JSON.stringify({ requested: COUNT, live: made, keysFile: KEYS_FILE, deadFile: DEAD_FILE })}`);
 }
 
 async function verifyOnly() {
@@ -547,6 +564,7 @@ async function verifyOnly() {
   const keys = readKeys();
   if (!keys.length) { console.log(`no keys in ${KEYS_FILE}`); process.exit(0); }
   let live = 0;
+  const dead = [];
   // The pool flaps: keep walking distinct exits until one answers, because a
   // transport error is not a provider verdict (measured 2026-10-21 — two live
   // keys read ✘ on ECONNRESET exits twice in a row before this).
@@ -557,11 +575,13 @@ async function verifyOnly() {
     for (let t = 0; t < attempts; t++) {
       try { g = await chatGate(exits[(i + t) % exits.length], keys[i]); break; } catch (e) { lastErr = e; }
     }
-    if (!g) { console.log(`  ✘ ${keys[i].slice(0, 12)}… ${String(lastErr && lastErr.message).slice(0, 90)} (${attempts} exits tried)`); continue; }
+    if (!g) { dead.push({ key: keys[i], why: String(lastErr && lastErr.message).slice(0, 60) }); console.log(`  ✘ ${keys[i].slice(0, 12)}… ${String(lastErr && lastErr.message).slice(0, 90)} (${attempts} exits tried)`); continue; }
     if (g.ok) live++;
+    else dead.push({ key: keys[i], why: `chat=${g.status}` });
     console.log(`  ${g.ok ? '✔' : '✘'} ${keys[i].slice(0, 12)}… chat=${g.status}`);
   }
-  console.log(`verify: ${live}/${keys.length} keys live`);
+  fs.writeFileSync(DEAD_FILE, dead.map((d) => `${d.key}\t# ${d.why}`).join('\n') + (dead.length ? '\n' : ''));
+  console.log(`verify: ${live}/${keys.length} keys live — the ${dead.length} dead one(s) are in ${DEAD_FILE}`);
   process.exit(live === keys.length ? 0 : 1);
 }
 
