@@ -166,7 +166,7 @@ node src/cli.js --help
 | `--token-cmd <cmd>` | çözücü komutu; hesap başına `ONEMIN_CDATA`/`ONEMIN_ACTION`/`ONEMIN_SITEKEY`/`ONEMIN_URL` alır ve bir token yazdırır |
 | `--token <cid:tok>` | yakalanmış bir challengeId:token çifti (tek hesap) |
 | `--manual` | her token'ı elle yapıştırın |
-| `--tries N` / `--gap MS` | hesap başına denenen çıkış sayısı (`2`) / hesaplar arası bekleme (`15000`) |
+| `--exits N` / `--gap MS` | hesap başına denenen çıkış sayısı (`6`) / hesaplar arası bekleme (`15000`) |
 
 ## 🛰️ Proxy arkasında
 

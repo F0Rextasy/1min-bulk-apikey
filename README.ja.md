@@ -166,7 +166,7 @@ node src/cli.js --help
 | `--token-cmd <cmd>` | ソルバーコマンド; アカウントごとに`ONEMIN_CDATA`/`ONEMIN_ACTION`/`ONEMIN_SITEKEY`/`ONEMIN_URL`を受け取り、1つのトークンを出力 |
 | `--token <cid:tok>` | キャプチャしたchallengeId:tokenペア(単一アカウント) |
 | `--manual` | 各トークンを手動で貼り付け |
-| `--tries N` / `--gap MS` | アカウントごとに試す出口(`2`) / アカウント間の一時停止(`15000`) |
+| `--exits N` / `--gap MS` | アカウントごとに試す出口(`6`) / アカウント間の一時停止(`15000`) |
 
 ## 🛰️ プロキシの背後で
 

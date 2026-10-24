@@ -166,7 +166,7 @@ node src/cli.js --help
 | `--token-cmd <cmd>` | Solver-Befehl; pro Konto erhält er `ONEMIN_CDATA`/`ONEMIN_ACTION`/`ONEMIN_SITEKEY`/`ONEMIN_URL` und gibt ein Token aus |
 | `--token <cid:tok>` | ein erfasstes challengeId:token-Paar (einzelnes Konto) |
 | `--manual` | jedes Token von Hand einfügen |
-| `--tries N` / `--gap MS` | pro Konto versuchte Exits (`2`) / Pause zwischen Konten (`15000`) |
+| `--exits N` / `--gap MS` | pro Konto versuchte Exits (`6`) / Pause zwischen Konten (`15000`) |
 
 ## 🛰️ Hinter einem Proxy
 

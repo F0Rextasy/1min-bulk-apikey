@@ -166,7 +166,7 @@ node src/cli.js --help
 | `--token-cmd <cmd>` | comando solucionador; por cuenta recibe `ONEMIN_CDATA`/`ONEMIN_ACTION`/`ONEMIN_SITEKEY`/`ONEMIN_URL` e imprime un token |
 | `--token <cid:tok>` | un par challengeId:token capturado (cuenta única) |
 | `--manual` | pegar cada token a mano |
-| `--tries N` / `--gap MS` | salidas probadas por cuenta (`2`) / pausa entre cuentas (`15000`) |
+| `--exits N` / `--gap MS` | salidas probadas por cuenta (`6`) / pausa entre cuentas (`15000`) |
 
 ## 🛰️ Detrás de un proxy
 

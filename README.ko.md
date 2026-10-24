@@ -166,7 +166,7 @@ node src/cli.js --help
 | `--token-cmd <cmd>` | 솔버 명령; 계정당 `ONEMIN_CDATA`/`ONEMIN_ACTION`/`ONEMIN_SITEKEY`/`ONEMIN_URL`을 받고 하나의 토큰을 출력 |
 | `--token <cid:tok>` | 캡처된 challengeId:token 쌍 (단일 계정) |
 | `--manual` | 각 토큰을 수동으로 붙여넣기 |
-| `--tries N` / `--gap MS` | 계정당 시도할 출구 (`2`) / 계정 간 일시정지 (`15000`) |
+| `--exits N` / `--gap MS` | 계정당 시도할 출구 (`6`) / 계정 간 일시정지 (`15000`) |
 
 ## 🛰️ 프록시 뒤에서
 

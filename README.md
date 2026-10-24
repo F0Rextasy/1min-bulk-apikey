@@ -171,7 +171,7 @@ node src/cli.js --help
 | `--token-cmd <cmd>` | solver command; per account it gets `ONEMIN_CDATA`/`ONEMIN_ACTION`/`ONEMIN_SITEKEY`/`ONEMIN_URL` and prints one token |
 | `--token <cid:tok>` | a captured challengeId:token pair (single account) |
 | `--manual` | paste each token by hand |
-| `--tries N` / `--gap MS` | exits tried per account (`2`) / pause between accounts (`15000`) |
+| `--exits N` / `--gap MS` | exits tried per account (`6`) / pause between accounts (`15000`) |
 
 ## 🛰️ Behind a proxy
 

@@ -166,7 +166,7 @@ node src/cli.js --help
 | `--token-cmd <cmd>` | 求解器命令；每个账户会获得 `ONEMIN_CDATA`/`ONEMIN_ACTION`/`ONEMIN_SITEKEY`/`ONEMIN_URL` 并打印一个 token |
 | `--token <cid:tok>` | 捕获的 challengeId:token 对（单账户） |
 | `--manual` | 手动粘贴每个 token |
-| `--tries N` / `--gap MS` | 每个账户尝试的出口数（`2`）/ 账户之间的暂停（`15000`） |
+| `--exits N` / `--gap MS` | 每个账户尝试的出口数（`6`）/ 账户之间的暂停（`15000`） |
 
 ## 🛰️ 在代理后面
 
