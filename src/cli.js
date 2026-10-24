@@ -43,7 +43,7 @@
  *   --token-cmd <c>  command that prints one Turnstile token (one per account)
  *   --manual         paste the Turnstile token by hand (one per account)
  *   --pool <file>    proxy list, one exit per line (env ONEMIN_PROXIES) [optional]
- *   --tries N        exits tried per account before giving up            [2]
+ *   --exits N        exits tried per account before giving up            [6]
  *   --timeout MS     per-request timeout                             [60000]
  *   --verify-only    re-run every key in keys.txt through the chat gate
  *   --screen         only test the proxy list against 1min.AI
@@ -117,7 +117,7 @@ directly.`);
 const COUNT = Math.max(1, parseInt(arg('count', '1'), 10) || 1);
 const CONC = Math.min(4, Math.max(1, parseInt(arg('conc', '1'), 10) || 1));
 const GAP_MS = Math.max(0, parseInt(arg('gap', '15000'), 10) || 0);
-const TRIES = Math.max(1, parseInt(arg('tries', '2'), 10) || 2);
+const EXITS = Math.max(1, parseInt(arg('exits', '6'), 10) || 6);
 const TIMEOUT_MS = Math.max(5000, parseInt(arg('timeout', '60000'), 10) || 60000);
 const MODEL = arg('model', process.env.ONEMIN_MODEL || 'deepseek-flash');
 const MT_FOLDER = arg('mt-folder', '1min-bulk');
@@ -290,6 +290,15 @@ function loadExits() {
   }
   return exits;
 }
+/** A dead exit, not a panel verdict — the flow rotates to the next candidate. */
+const isExitError = (e) =>
+  /proxy connect failed|proxy CONNECT refused|proxy timeout|connect timeout|connect failed|ETIMEDOUT|ECONNREFUSED|ECONNRESET|ECONNABORTED|EPIPE|ENETUNREACH|EHOSTUNREACH|EAI_AGAIN|socket hang up|secureConnect|TLS|handshake/i.test(
+    String((e && e.message) || e),
+  );
+
+/** `host:port` of the exit in play, or `direct` when the pool is empty. */
+const exitLabel = (e) => (e ? `${e.host}:${e.port}` : 'direct');
+
 
 async function screen(exits) {
   let ok = 0;
@@ -515,16 +524,20 @@ async function mint() {
     return;
   }
   const accounts = loadAccounts();
-  log(`1min · ${COUNT} key(s) · conc ${CONC} · exits ${exits.filter(Boolean).length || 'direct'} · keys land in keys.txt`);
+  const routes = exits[0] === null ? 1 : EXITS;
+  log(`1min · ${COUNT} key(s) · conc ${CONC} · exits ${exits.filter(Boolean).length || 'direct'} · up to ${routes} per account · keys land in keys.txt`);
   let made = 0;
+  let transportDead = 0;
   for (let round = 0; round < COUNT; round += CONC) {
     const jobs = [];
     for (let k = 0; k < CONC && round + k < COUNT; k++) {
       const i = round + k;
       jobs.push((async () => {
         let lastErr = null;
-        for (let t2 = 0; t2 < TRIES; t2++) {
-          const exit = exits[(i + t2) % exits.length];
+        let lastWasExit = false;
+        for (let a = 0; a < routes; a++) {
+          const exit = exits[(i + a) % exits.length];
+          lastWasExit = false;
           try {
             const rec = await signUp(exit, i + 1);
             const g = await chatGate(exit, rec.key);
@@ -547,13 +560,26 @@ async function mint() {
             made++;
             log(`account ${i + 1} ✔ chat-200 ${MODEL} · credit ${rec.creditAtLogin} · ${rec.key.slice(0, 12)}…`);
             return;
-          } catch (e) { lastErr = e; }
+          } catch (e) {
+            lastErr = e;
+            lastWasExit = isExitError(e);
+            if (lastWasExit) {
+              const where = exit ? `exit ${a + 1}/${routes} ${exitLabel(exit)}` : `direct attempt ${a + 1}/${routes}`;
+              log(`account ${i + 1}: ${where} dead (${String(e.message).slice(0, 70)})${exit ? ' → next exit' : ''}`);
+            }
+          }
         }
+        if (lastWasExit) transportDead++;
         log(`account ${i + 1}: ${lastErr ? String(lastErr.message).slice(0, 160) : 'failed'}`);
       })());
     }
     await Promise.all(jobs);
     if (GAP_MS) await sleep(GAP_MS);
+  }
+  if (!made && transportDead === COUNT) {
+    const route = exits[0] === null ? 'direct mode (no proxy list)' : `${exits.length}-exit pool`;
+    console.error(`[fatal] no usable route — ${COUNT} account(s) × ${routes} candidate(s) over ${route}: every attempt died at the transport layer.`);
+    process.exit(1);
   }
   log(`done — ${made}/${COUNT} key(s) written to ${KEYS_FILE}`);
   console.log(`__MINT_SUMMARY__ ${JSON.stringify({ requested: COUNT, live: made, keysFile: KEYS_FILE, deadFile: DEAD_FILE })}`);
@@ -568,7 +594,7 @@ async function verifyOnly() {
   // The pool flaps: keep walking distinct exits until one answers, because a
   // transport error is not a provider verdict (measured 2026-10-21 — two live
   // keys read ✘ on ECONNRESET exits twice in a row before this).
-  const attempts = Math.max(TRIES, Math.min(exits.length, 6));
+  const attempts = Math.max(EXITS, Math.min(exits.length, 6));
   for (let i = 0; i < keys.length; i++) {
     let g = null;
     let lastErr = null;
